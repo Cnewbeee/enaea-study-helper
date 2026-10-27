@@ -34,3 +34,6 @@ Thumbs.db
 
 # Playwright persistent browser profile created by the Python helper
 enaea-auto-profile/
+
+# Local build artifacts (release zip is uploaded to GitHub Releases, not committed)
+dist/
