@@ -28,7 +28,8 @@
     finishConfirmMs: 4000,
     completeRetryMs: 90000,
     prefetchMs: 5 * 60 * 1000,
-    completeThreshold: 95,
+    completeThreshold: 100,
+    maxDesyncReplayAttempts: 4,
     debug: true,
   };
 
@@ -47,8 +48,15 @@
   let resumeAttempted = false;
   let resumeAttempts = 0;
   let lastResumeAt = 0;
-  let resumeTargetTitle = '';
-  const seekDone = new Set();
+  let desyncSince = 0;
+  let desyncReplayAttempts = 0;
+  let lastDesyncReplayAt = 0;
+  let desyncKey = '';
+  let pageSeekTitle = '';
+  let pageSeekTarget = 0;
+  let pageSeekAttempts = 0;
+  let lastPageSeekAt = 0;
+  const MAX_PAGE_SEEK_ATTEMPTS = 5;
   let lastPlayAttemptAt = 0;
   let playAttempts = 0;
   let autoPlaySucceeded = false;
@@ -547,16 +555,9 @@
   }
 
   function findResumeIndex(episodes) {
-    // 优先“已经看了一部分”的分集，取最靠后的一集（通常就是上次看到的位置）
-    let idx = -1;
-    episodes.forEach((e, i) => {
-      if (e.progress > 0 && e.progress < CONFIG.completeThreshold) idx = i;
-    });
-    if (idx >= 0) return idx;
-
-    // 没有部分完成的分集时，返回第一个还没完成的分集（自然下一集）
-    idx = episodes.findIndex((e) => e.progress < CONFIG.completeThreshold);
-    return idx;
+    // 按课程顺序找最早未完成的分集，避免前面某一集没看完就被后面的分集跳过。
+    // 例如第三集 68%、第四集 54% 时，应先补第三集。
+    return episodes.findIndex((e) => e.progress < CONFIG.completeThreshold);
   }
 
   function clickElement(el) {
@@ -673,17 +674,13 @@
       video && active && active.durationSec > 0 &&
       Math.abs(video.duration - active.durationSec) <= Math.max(5, active.durationSec * 0.05)
     );
-    const videoRemaining = videoMatchesEpisode ? Math.max(0, video.duration - video.current) : null;
     const progressRemaining = active ? active.durationSec * (100 - active.progress) / 100 : null;
-    const remaining = videoRemaining != null && videoRemaining > 4 ? videoRemaining : progressRemaining;
-    const livePercent = videoMatchesEpisode && video.duration > 30
-      ? Math.round((video.current / video.duration) * 100)
-      : (active ? active.progress : 0);
+    const remaining = progressRemaining;
 
     const allDone = episodes.length > 0 && episodes.every((e) => e.progress >= CONFIG.completeThreshold);
 
-    // 站点有时把完整播完记成 96%。整门课都达到 95% 后，不要因为站点从第一集
-    // 重新开始播放就再次续播/重播，而是直接切到下一门课程。
+    // 整门课所有分集都达到 100% 后，不要因为站点从第一集重新开始播放
+    // 就再次续播/重播，而是直接切到下一门课程。
     if (allDone && activeIdx === 0 && videoMatchesEpisode && video.current < 60 && !switching) {
       if (!finishSince) finishSince = Date.now();
       const elapsed = Date.now() - finishSince;
@@ -701,17 +698,24 @@
     }
 
     // 刷新/重新进入课程后，站点会从第一集开始。自动续播到上次未看完的分集。
+    // 只切换到对应分集；播放位置由下面的“网页进度定位”逻辑处理。
     const resumeIdx = findResumeIndex(episodes);
-    if (resumeIdx > activeIdx && resumeAttempts < 2 && Date.now() - lastResumeAt > 8000) {
+
+    if (resumeIdx >= 0 && resumeIdx === activeIdx) {
+      // 当前已经在“最早未完成”的分集上，重置补全尝试次数
+      resumeAttempts = 0;
+    }
+
+    // 如果当前在后面的分集，但前面还有分集没到 100%，先跳回去补全，避免遗漏。
+    if (resumeIdx >= 0 && resumeIdx < activeIdx && resumeAttempts < 2 && Date.now() - lastResumeAt > 8000) {
       const target = episodes[resumeIdx];
       resumeAttempted = true;
       resumeAttempts += 1;
       lastResumeAt = Date.now();
-      resumeTargetTitle = target.title;
-      log('自动续播到上次分集', { title: target.title, progress: target.progress, attempt: resumeAttempts });
+      log('前面还有分集未完成，跳回补全', { title: target.title, progress: target.progress, attempt: resumeAttempts });
       updatePanel({
-        status: '正在续播：' + target.title,
-        detail: `上次进度 ${target.progress}%`,
+        status: '还有分集未完成，跳回补全：' + target.title,
+        detail: `网页进度 ${target.progress}%`,
         next: '',
         tone: 'warn',
       });
@@ -724,21 +728,133 @@
       return;
     }
 
-    // 站点如果从 0 秒开始播放，跳到该分集上次观看的百分比位置
-    if (
-      resumeTargetTitle &&
-      active &&
-      normalizeTitle(active.title) === normalizeTitle(resumeTargetTitle) &&
-      videoMatchesEpisode &&
-      active.progress > 3 &&
-      video.current < 5 &&
-      !seekDone.has(active.title)
-    ) {
-      try {
-        video.video.currentTime = video.duration * (active.progress / 100);
-        seekDone.add(active.title);
-        log('跳转到上次观看进度', active.progress + '%');
-      } catch (_) {}
+    if (resumeIdx > activeIdx && resumeAttempts < 2 && Date.now() - lastResumeAt > 8000) {
+      const target = episodes[resumeIdx];
+      resumeAttempted = true;
+      resumeAttempts += 1;
+      lastResumeAt = Date.now();
+      log('自动续播到上次分集', { title: target.title, progress: target.progress, attempt: resumeAttempts });
+      updatePanel({
+        status: '正在续播：' + target.title,
+        detail: `网页进度 ${target.progress}%`,
+        next: '',
+        tone: 'warn',
+      });
+      clickElement(target.titleEl || target.el);
+      lastPlayAttemptAt = 0;
+      playAttempts = 0;
+      autoPlaySucceeded = false;
+      setTimeout(() => playVideos(true), 1500);
+      setTimeout(() => playVideos(true), 3500);
+      return;
+    }
+
+    // 前面还有分集未完成时，不允许继续往后跳，先等补全逻辑把它处理完。
+    if (resumeIdx >= 0 && resumeIdx < activeIdx) {
+      updatePanel({
+        status: '前面还有分集未完成，等待补全',
+        detail: `最早未完成：${episodes[resumeIdx].title} ${episodes[resumeIdx].progress}%`,
+        next: '',
+        tone: 'warn',
+      });
+      return;
+    }
+
+    // 以网页显示的进度为准。视频元素先播完、但网页进度还没到阈值时，
+    // 不切下一集；回到网页进度对应的位置重播剩余部分，让平台重新记录。
+    const videoEnded = Boolean(videoMatchesEpisode && (video.ended || video.duration - video.current <= 5));
+    const pageNotDone = Boolean(active && active.progress < CONFIG.completeThreshold);
+
+    const currentDesyncKey = active ? `${active.title}|${active.progress}` : '';
+    if (currentDesyncKey !== desyncKey) {
+      desyncKey = currentDesyncKey;
+      desyncReplayAttempts = 0;
+      desyncSince = 0;
+    }
+
+    if (videoEnded && pageNotDone) {
+      if (!desyncSince) desyncSince = Date.now();
+      const waited = Date.now() - desyncSince;
+
+      if (waited > 8000 && desyncReplayAttempts < CONFIG.maxDesyncReplayAttempts && Date.now() - lastDesyncReplayAt > 30000) {
+        try {
+          video.video.currentTime = Math.floor(video.duration * (active.progress / 100));
+          desyncReplayAttempts += 1;
+          lastDesyncReplayAt = Date.now();
+          desyncSince = 0;
+          log('视频结束但网页进度未达标，回到网页进度位置重播', active.progress);
+          updatePanel({
+            status: '视频已结束，网页进度未达标',
+            detail: `已回到网页进度 ${active.progress}% 的位置重播，等待平台记录`,
+            next: nextEpisode ? '下一集：' + nextEpisode.title : '',
+            tone: 'warn',
+          });
+          playVideos(true);
+        } catch (_) {}
+        return;
+      }
+
+      if (waited > 8000 && desyncReplayAttempts >= CONFIG.maxDesyncReplayAttempts) {
+        updatePanel({
+          status: `视频已结束，但网页进度只有 ${active.progress}%`,
+          detail: '平台没有记录完整观看，请手动检查或重看本集',
+          next: '',
+          tone: 'err',
+        });
+        return;
+      }
+
+      updatePanel({
+        status: '视频已结束，等待网页进度更新…',
+        detail: `网页进度 ${active.progress}% · 已完成 ${completed}/${episodes.length} 集`,
+        next: nextEpisode ? '下一集：' + nextEpisode.title : '',
+        tone: 'warn',
+      });
+      return;
+    }
+
+    desyncSince = 0;
+
+    // 按网页显示的进度定位：floor(进度% × 分集时长)。
+    // 只向前跳到网页已经记录的进度，不允许超过它；播放器可能在初始化时把
+    // currentTime 重置为 0，所以允许重试几次。
+    if (videoMatchesEpisode && active && active.progress > 1 && active.progress < CONFIG.completeThreshold) {
+      const target = Math.floor(video.duration * (active.progress / 100));
+      if (video.current < target - 5) {
+        const sameTarget = pageSeekTitle === active.title && Math.abs(pageSeekTarget - target) < 5;
+        if (!sameTarget) {
+          pageSeekTitle = active.title;
+          pageSeekTarget = target;
+          pageSeekAttempts = 0;
+          lastPageSeekAt = 0;
+        }
+        if (pageSeekAttempts < MAX_PAGE_SEEK_ATTEMPTS && Date.now() - lastPageSeekAt > 2500) {
+          try {
+            video.video.currentTime = target;
+            pageSeekAttempts += 1;
+            lastPageSeekAt = Date.now();
+            log('按网页进度定位', {
+              progress: active.progress,
+              target: formatDuration(target),
+              attempt: pageSeekAttempts,
+              current: formatDuration(video.current),
+            });
+            updatePanel({
+              status: `按网页进度 ${active.progress}% 继续`,
+              detail: `定位到 ${formatDuration(target)} / ${formatDuration(video.duration)}（第 ${pageSeekAttempts} 次）`,
+              next: nextEpisode ? '下一集：' + nextEpisode.title : '',
+              tone: 'warn',
+            });
+            playVideos(true);
+          } catch (_) {}
+        }
+      } else {
+        // 已经定位到网页进度附近，或者播放器自己恢复得更靠后，不再干预
+        pageSeekTitle = '';
+        pageSeekTarget = 0;
+        pageSeekAttempts = 0;
+        lastPageSeekAt = 0;
+      }
     }
 
     // 刷新后视频常常是暂停的；自动尝试播放（必要时静音）
@@ -747,8 +863,7 @@
     }
 
     const finished = Boolean(
-      (videoMatchesEpisode && (video.ended || video.duration - video.current <= 3)) ||
-      (active && active.progress >= CONFIG.completeThreshold && !videoMatchesEpisode) ||
+      (active && active.progress >= CONFIG.completeThreshold) ||
       (allDone && !nextEpisode)
     );
 
@@ -759,7 +874,7 @@
           ? `第 ${activeIdx + 1}/${episodes.length} 集 · 剩余 ${formatDuration(remaining == null ? 0 : remaining)}`
           : '监控中…',
         detail: active
-          ? `进度 ${videoMatchesEpisode ? livePercent : active.progress}% · 已完成 ${completed}/${episodes.length} 集`
+          ? `网页进度 ${active.progress}% · 已完成 ${completed}/${episodes.length} 集`
           : `已完成 ${completed}/${episodes.length} 集`,
         next: nextEpisode
           ? '下一集：' + nextEpisode.title
@@ -774,7 +889,21 @@
       return;
     }
 
-    // 本课程所有分集都结束，准备切下一门课程
+    // 切换下一门课程前，必须确认所有分集都达到 100%。
+    if (!allDone) {
+      const missing = findResumeIndex(episodes);
+      updatePanel({
+        status: '还有分集未完成，暂不切换课程',
+        detail: missing >= 0
+          ? `最早未完成：${episodes[missing].title} ${episodes[missing].progress}%`
+          : '等待网页进度更新',
+        next: '',
+        tone: 'warn',
+      });
+      return;
+    }
+
+    // 本课程所有分集都达到 100%，准备切下一门课程
     if (!finishSince) {
       finishSince = Date.now();
       log('本课程已完成，准备切换下一门课程');
