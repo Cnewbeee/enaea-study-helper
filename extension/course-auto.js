@@ -28,6 +28,7 @@
     finishConfirmMs: 4000,
     completeRetryMs: 90000,
     prefetchMs: 5 * 60 * 1000,
+    completeThreshold: 95,
     debug: true,
   };
 
@@ -549,12 +550,12 @@
     // 优先“已经看了一部分”的分集，取最靠后的一集（通常就是上次看到的位置）
     let idx = -1;
     episodes.forEach((e, i) => {
-      if (e.progress > 0 && e.progress < 100) idx = i;
+      if (e.progress > 0 && e.progress < CONFIG.completeThreshold) idx = i;
     });
     if (idx >= 0) return idx;
 
     // 没有部分完成的分集时，返回第一个还没完成的分集（自然下一集）
-    idx = episodes.findIndex((e) => e.progress < 100);
+    idx = episodes.findIndex((e) => e.progress < CONFIG.completeThreshold);
     return idx;
   }
 
@@ -665,8 +666,8 @@
 
     const activeIdx = chooseActiveIndex(episodes, video);
     const active = episodes[Math.max(0, activeIdx)];
-    const nextEpisode = episodes.slice(activeIdx + 1).find((e) => e.progress < 100) || null;
-    const completed = episodes.filter((e) => e.progress >= 100).length;
+    const nextEpisode = episodes.slice(activeIdx + 1).find((e) => e.progress < CONFIG.completeThreshold) || null;
+    const completed = episodes.filter((e) => e.progress >= CONFIG.completeThreshold).length;
 
     const videoMatchesEpisode = Boolean(
       video && active && active.durationSec > 0 &&
@@ -679,7 +680,25 @@
       ? Math.round((video.current / video.duration) * 100)
       : (active ? active.progress : 0);
 
-    const allDone = episodes.length > 0 && episodes.every((e) => e.progress >= 100);
+    const allDone = episodes.length > 0 && episodes.every((e) => e.progress >= CONFIG.completeThreshold);
+
+    // 站点有时把完整播完记成 96%。整门课都达到 95% 后，不要因为站点从第一集
+    // 重新开始播放就再次续播/重播，而是直接切到下一门课程。
+    if (allDone && activeIdx === 0 && videoMatchesEpisode && video.current < 60 && !switching) {
+      if (!finishSince) finishSince = Date.now();
+      const elapsed = Date.now() - finishSince;
+      if (elapsed >= CONFIG.finishConfirmMs) {
+        completeCourse(episodes, active);
+      } else {
+        updatePanel({
+          status: '本课程已完成，准备切换下一门课程…',
+          detail: `所有分集已达到 ${CONFIG.completeThreshold}% 以上，${Math.ceil((CONFIG.finishConfirmMs - elapsed) / 1000)} 秒后切换`,
+          next: prefetchedNext ? '下一课程：' + (prefetchedNext.title || prefetchedNext.courseId) : '',
+          tone: 'warn',
+        });
+      }
+      return;
+    }
 
     // 刷新/重新进入课程后，站点会从第一集开始。自动续播到上次未看完的分集。
     const resumeIdx = findResumeIndex(episodes);
@@ -729,7 +748,7 @@
 
     const finished = Boolean(
       (videoMatchesEpisode && (video.ended || video.duration - video.current <= 3)) ||
-      (active && active.progress >= 99 && !videoMatchesEpisode) ||
+      (active && active.progress >= CONFIG.completeThreshold && !videoMatchesEpisode) ||
       (allDone && !nextEpisode)
     );
 

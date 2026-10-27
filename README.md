@@ -59,7 +59,7 @@ ENAEAA 自动连播
 
 ### 安装/更新
 
-> 不想用 Git？到 [Releases](https://github.com/Cnewbeee/enaea-study-helper/releases) 下载最新版 `enaea-study-helper-v2.0.0.zip`，解压后加载解压出来的文件夹即可。
+> 不想用 Git？到 [Releases](https://github.com/Cnewbeee/enaea-study-helper/releases) 下载最新版 `enaea-study-helper-v2.0.1.zip`，解压后加载解压出来的文件夹即可。
 
 1. 打开 `edge://extensions/` 或 `chrome://extensions/`。
 2. 打开 **开发人员模式**。
