@@ -1,0 +1,25 @@
+name: Feature request
+description: 建议新增功能或适配新的页面结构
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你希望解决什么问题？
+      description: 例如：某个课程页面的分集结构不同、希望支持更多浏览器等
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的实现方式
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息
+      description: 页面截图请打码；不要粘贴账号、Cookie、课程 ID 等个人信息
+    validations:
+      required: false

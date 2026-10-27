@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Local secrets and machine-specific files
+.env
+.env.*
+*.local
+*.log
+
+# Playwright persistent browser profile created by the Python helper
+enaea-auto-profile/

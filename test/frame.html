@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>iframe 弹窗</title></head>
+<body>
+  <div class="layui-layer layui-layer-dialog" id="popup"
+       style="position:fixed;z-index:99999;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;padding:20px;width:400px;">
+    <div class="layui-layer-content">您已学习 20 分钟，是否继续学习？</div>
+    <div class="layui-layer-btn">
+      <a href="javascript:;" class="layui-layer-btn0" id="ok">继续学习</a>
+    </div>
+  </div>
+  <script>
+    document.getElementById('ok').addEventListener('click', function () {
+      document.body.dataset.clicked = 'frame';
+      document.getElementById('popup').remove();
+    });
+  </script>
+</body>
+</html>

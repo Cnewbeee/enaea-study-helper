@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>ENAEAA 自动确认测试页</title>
+  <style>
+    body { font-family: "Microsoft YaHei", sans-serif; padding: 24px; background: #f5f7fa; }
+    .decoy { display: inline-block; margin: 8px 0 20px; }
+    button { margin: 4px; padding: 8px 14px; cursor: pointer; }
+    .mock-dialog { background: #fff; border-radius: 6px; padding: 22px 26px; min-width: 380px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+    .mock-dialog-btns { margin-top: 18px; text-align: right; }
+    .plain-btn { display: inline-block; padding: 8px 16px; margin-left: 10px; background: #1677ff; color: #fff; border-radius: 4px; cursor: pointer; }
+    .plain-btn.cancel { background: #eee; color: #333; }
+  </style>
+</head>
+<body>
+  <h2>ENAEAA 自动确认测试页</h2>
+  <p>普通页面里的“继续学习”链接不应被点击：</p>
+  <a class="decoy" href="#" id="decoy"
+     onclick="document.body.dataset.decoyClicked='1'; return false;">继续学习</a>
+
+  <p>点击下面的按钮打开不同类型的弹窗：</p>
+  <div>
+    <button onclick="showLayui()">1. layui 弹窗（继续学习）</button>
+    <button onclick="showGeneric()">2. 自定义浮层（确定）</button>
+    <button onclick="showExit()">3. 退出确认（不应点击）</button>
+    <button onclick="showQuiz()">4. 交卷确认（不应点击）</button>
+    <button onclick="showLayuiLater()">5. 1 秒后显示弹窗</button>
+    <button onclick="showNative()">6. 原生 confirm（应确认）</button>
+    <button onclick="showNativeExit()">7. 原生退出确认（不应确认）</button>
+    <button onclick="showQuizContinue()">8. 继续提交确认（不应点击）</button>
+  </div>
+
+  <script>
+    function setClicked(type) {
+      document.body.dataset.clicked = type;
+    }
+
+    function showLayui() {
+      const wrap = document.createElement('div');
+      wrap.className = 'layui-layer layui-layer-dialog';
+      wrap.style.cssText = 'position:fixed;z-index:99999;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;padding:20px;width:430px;border-radius:4px;box-shadow:0 8px 30px rgba(0,0,0,.25);';
+      wrap.innerHTML = `
+        <div class="layui-layer-title">学习提醒</div>
+        <div class="layui-layer-content">您已学习 20 分钟，是否继续学习？</div>
+        <div class="layui-layer-btn">
+          <a href="javascript:;" class="layui-layer-btn1" data-action="exit">退出学习</a>
+          <a href="javascript:;" class="layui-layer-btn0" data-action="ok">继续学习</a>
+        </div>`;
+      wrap.querySelector('[data-action="ok"]').addEventListener('click', () => {
+        setClicked('layui');
+        wrap.remove();
+      });
+      wrap.querySelector('[data-action="exit"]').addEventListener('click', () => {
+        document.body.dataset.exitClicked = 'layui';
+        wrap.remove();
+      });
+      document.body.appendChild(wrap);
+    }
+
+    function showLayuiLater() {
+      const wrap = document.createElement('div');
+      wrap.className = 'layui-layer layui-layer-dialog';
+      wrap.style.cssText = 'display:none;position:fixed;z-index:99999;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;padding:20px;width:430px;border-radius:4px;';
+      wrap.innerHTML = `
+        <div class="layui-layer-content">您已观看 20 分钟，请继续观看。</div>
+        <div class="layui-layer-btn">
+          <a href="javascript:;" class="layui-layer-btn0" data-action="ok">继续观看</a>
+        </div>`;
+      wrap.querySelector('[data-action="ok"]').addEventListener('click', () => {
+        setClicked('later');
+        wrap.remove();
+      });
+      document.body.appendChild(wrap);
+      setTimeout(() => { wrap.style.display = 'block'; }, 1000);
+    }
+
+    function showGeneric() {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;';
+      const box = document.createElement('div');
+      box.className = 'mock-dialog';
+      box.innerHTML = `
+        <div>您已学习 20 分钟，请点击确定继续学习。</div>
+        <div class="mock-dialog-btns"><span class="plain-btn" data-action="ok">确定</span></div>`;
+      box.querySelector('[data-action="ok"]').addEventListener('click', () => {
+        setClicked('generic');
+        wrap.remove();
+      });
+      wrap.appendChild(box);
+      document.body.appendChild(wrap);
+    }
+
+    function showExit() {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;';
+      const box = document.createElement('div');
+      box.className = 'mock-dialog';
+      box.innerHTML = `
+        <div>确定要退出学习吗？</div>
+        <div class="mock-dialog-btns">
+          <span class="plain-btn cancel" data-action="cancel">取消</span>
+          <span class="plain-btn" data-action="exit-ok">确定</span>
+        </div>`;
+      box.querySelector('[data-action="cancel"]').addEventListener('click', () => wrap.remove());
+      box.querySelector('[data-action="exit-ok"]').addEventListener('click', () => {
+        document.body.dataset.exitClicked = '1';
+        wrap.remove();
+      });
+      wrap.appendChild(box);
+      document.body.appendChild(wrap);
+    }
+
+    function showQuiz() {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;';
+      const box = document.createElement('div');
+      box.className = 'mock-dialog';
+      box.innerHTML = `
+        <div>确定要提交试卷吗？</div>
+        <div class="mock-dialog-btns">
+          <span class="plain-btn cancel" data-action="cancel">取消</span>
+          <span class="plain-btn" data-action="quiz-ok">确定</span>
+        </div>`;
+      box.querySelector('[data-action="cancel"]').addEventListener('click', () => wrap.remove());
+      box.querySelector('[data-action="quiz-ok"]').addEventListener('click', () => {
+        document.body.dataset.quizClicked = '1';
+        wrap.remove();
+      });
+      wrap.appendChild(box);
+      document.body.appendChild(wrap);
+    }
+
+    function showQuizContinue() {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;';
+      const box = document.createElement('div');
+      box.className = 'mock-dialog';
+      box.innerHTML = `
+        <div>试卷尚未完成，确定继续提交吗？</div>
+        <div class="mock-dialog-btns">
+          <span class="plain-btn cancel" data-action="cancel">取消</span>
+          <span class="plain-btn" data-action="quiz-continue">确定</span>
+        </div>`;
+      box.querySelector('[data-action="cancel"]').addEventListener('click', () => wrap.remove());
+      box.querySelector('[data-action="quiz-continue"]').addEventListener('click', () => {
+        document.body.dataset.quizContinueClicked = '1';
+        wrap.remove();
+      });
+      wrap.appendChild(box);
+      document.body.appendChild(wrap);
+    }
+
+    function showNative() {
+      document.body.dataset.nativeResult = String(confirm('您已学习20分钟，是否继续学习？'));
+    }
+
+    function showNativeExit() {
+      document.body.dataset.nativeExitResult = String(confirm('确定要退出学习吗？'));
+    }
+  </script>
+</body>
+</html>

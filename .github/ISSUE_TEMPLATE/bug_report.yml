@@ -1,0 +1,76 @@
+name: Bug report
+description: 报告扩展/脚本无法工作、误点、未自动切换等问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请先确认已阅读 README 的“常见问题”，并删掉日志中的姓名、课程 ID 等个人信息。
+  - type: input
+    id: version
+    attributes:
+      label: 扩展版本
+      description: 在 edge://extensions 或 chrome://extensions 中查看
+      placeholder: "2.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: 浏览器
+      options:
+        - Microsoft Edge
+        - Google Chrome
+        - 其他 Chromium 浏览器
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 问题类型
+      options:
+        - 弹窗确认
+        - 自动续播上次分集
+        - 自动下一集
+        - 自动下一门课程
+        - 状态面板/诊断
+        - 安装/加载扩展
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开课程列表标签页
+        2. 打开课程播放页
+        3. 刷新页面
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 诊断信息（可选）
+      description: 在课程页面点面板上的“诊断”或按 Ctrl+Shift+D，粘贴前请删除个人信息
+      render: json
+  - type: textarea
+    id: console
+    attributes:
+      label: 控制台日志（可选）
+      description: F12 → Console，筛选 `[enaea-auto]` 或 `[enaea-auto-next]`
+      render: shell

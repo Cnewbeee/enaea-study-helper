@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用说明 / 常见问题
+    url: https://github.com/Cnewbeee/enaea-study-helper#常见问题
+    about: 安装、刷新、自动续播、下一门课程等问题请先看 README
+  - name: 安全问题
+    url: https://github.com/Cnewbeee/enaea-study-helper/security/advisories/new
+    about: 请不要在公开 Issue 中粘贴账号、Cookie、Token 或个人课程信息
